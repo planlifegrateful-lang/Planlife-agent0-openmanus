@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  video-builder:
+    build: ./video-builder
+    container_name: video-builder
+    ports:
+      - "${VIDEO_BUILDER_PORT:-8001}:8001"
+    environment:
+      - OUTPUT_DIR=/data/output
+      - FLASK_ENV=production
+    volumes:
+      - ./data/video-output:/data/output
+
+  webhook-listener:
+    build: ./webhook-listener
+    container_name: webhook-listener
+    ports:
+      - "${WEBHOOK_LISTENER_PORT:-8000}:8000"
+    environment:
+      - VIDEO_BUILDER_URL=http://video-builder:8001/build
+
+  openmanus:
+    build: ./OpenManus
+    container_name: openmanus
+    ports:
+      - "${OPENMANUS_PORT:-8002}:8002"
+    environment:
+      - TZ=UTC
+
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: n8n
+    ports:
+      - "${N8N_PORT:-5678}:5678"
+    environment:
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=user
+      - N8N_BASIC_AUTH_PASSWORD=pass
+    volumes:
+      - ./n8n:/home/node/.n8n
+    depends_on:
+      - webhook-listener
+
+networks:
+  default:
+    driver: bridge
