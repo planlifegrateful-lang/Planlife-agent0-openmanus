@@ -1,46 +1,83 @@
-version: '3.8'
-
 services:
   video-builder:
     build: ./video-builder
     container_name: video-builder
+    restart: unless-stopped
     ports:
       - "${VIDEO_BUILDER_PORT:-8001}:8001"
     environment:
       - OUTPUT_DIR=/data/output
       - FLASK_ENV=production
+      - PORT=8001
     volumes:
-      - ./data/video-output:/data/output
+      - video-output:/data/output
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   webhook-listener:
     build: ./webhook-listener
     container_name: webhook-listener
+    restart: unless-stopped
     ports:
       - "${WEBHOOK_LISTENER_PORT:-8000}:8000"
     environment:
       - VIDEO_BUILDER_URL=http://video-builder:8001/build
+      - PORT=8000
+    depends_on:
+      video-builder:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   openmanus:
     build: ./OpenManus
     container_name: openmanus
+    restart: unless-stopped
     ports:
       - "${OPENMANUS_PORT:-8002}:8002"
     environment:
       - TZ=UTC
+      - PORT=8002
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   n8n:
     image: n8nio/n8n:latest
     container_name: n8n
+    restart: unless-stopped
     ports:
       - "${N8N_PORT:-5678}:5678"
     environment:
-      - N8N_BASIC_AUTH_ACTIVE=true
-      - N8N_BASIC_AUTH_USER=user
-      - N8N_BASIC_AUTH_PASSWORD=pass
+      - N8N_BASIC_AUTH_ACTIVE=${N8N_BASIC_AUTH_ACTIVE:-true}
+      - N8N_BASIC_AUTH_USER=${N8N_BASIC_AUTH_USER:-admin}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD:-changeme}
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - WEBHOOK_URL=http://localhost:${N8N_PORT:-5678}/
+      - GENERIC_TIMEZONE=UTC
     volumes:
-      - ./n8n:/home/node/.n8n
+      - n8n-data:/home/node/.n8n
+      - ./n8n:/home/node/.n8n/workflows-import
     depends_on:
-      - webhook-listener
+      webhook-listener:
+        condition: service_healthy
+
+volumes:
+  video-output:
+  n8n-data:
 
 networks:
   default:

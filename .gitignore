@@ -1,0 +1,33 @@
+# Env & secrets
+.env
+.env.*
+!.env.example
+
+# Data & outputs
+data/
+*.mp4
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+venv/
+.venv/
+env/
+
+# Docker
+*.tar
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# n8n
+n8n/.n8n/
