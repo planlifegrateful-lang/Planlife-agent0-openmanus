@@ -1,68 +1,56 @@
-# Planlife OpenManus Pipeline
+# Planlife OpenManus Pipeline (Zero-API)
 
-Self-hostable skeleton for an OpenManus-powered video generation / agent pipeline.
+Self-hostable **fully local** video generation pipeline. **No API keys. No cloud AI.**
 
-## Architecture
+## What it does
 
-```
-[External Trigger / n8n] 
-        |
-        v
-[webhook-listener :8000]  --->  [video-builder :8001]  --->  /data/output/*.mp4
-        |
-        +-- optional [openmanus :8002] (placeholder agent)
-```
+1. Receives webhook with title + script/prompt
+2. Builds text slides with Pillow
+3. Generates voiceover with `espeak-ng` (offline TTS)
+4. Assembles real playable MP4 with `ffmpeg`
+5. Saves to volume `/data/output`
 
-- **webhook-listener**: Receives POSTs, forwards JSON to video-builder
-- **video-builder**: Placeholder that writes a dummy .mp4 (replace with real OpenManus + ffmpeg pipeline)
-- **openmanus**: Placeholder Flask service (swap for real agent image)
-- **n8n**: Workflow automation (import `n8n/openmanus-workflow.json`)
+Also includes n8n + webhook-listener + placeholder OpenManus service.
 
 ## Quick Start
 
 ```bash
-# 1. Configure
+git clone https://github.com/planlifegrateful-lang/Planlife-agent0-openmanus.git
+cd Planlife-agent0-openmanus
 cp .env.example .env
-# edit .env — especially change N8N_BASIC_AUTH_PASSWORD
+# only change N8N password if you want
 
-# 2. Launch
 docker compose up --build -d
 
-# 3. Health checks
+# Health
 curl http://localhost:8000/health
 curl http://localhost:8001/health
-curl http://localhost:8002/health
 
-# 4. Trigger a build
+# Generate a real video
 curl -X POST http://localhost:8000/webhook \
   -H "Content-Type: application/json" \
-  -d '{"title": "My First Video", "prompt": "demo"}'
-
-# 5. n8n UI
-open http://localhost:5678
-# login with values from .env
+  -d '{
+    "title": "Morning Routine",
+    "script": "Wake up early. Drink water. Move your body. Win the day."
+  }'
 ```
 
-## Import n8n Workflow
+Videos land in the `video-output` Docker volume.
 
-1. Open n8n → Workflows → Import from File
-2. Select `n8n/openmanus-workflow.json`
-3. Activate the workflow
-4. Use the generated webhook URL or POST to the listener directly
+## Architecture
 
-## Next Steps (replace placeholders)
+```
+[Webhook / n8n] → webhook-listener:8000 → video-builder:8001 → /data/output/*.mp4
+                                         ↘ openmanus:8002 (optional)
+```
 
-1. Replace `video-builder/app.py` build logic with real OpenManus / LLM + media pipeline
-2. Swap `OpenManus/` image for official or custom agent image
-3. Add auth (API keys / JWT) on webhook-listener
-4. Persist real video assets and add cleanup policies
-5. Wire Telegram / social media using the env vars
+## Zero-API stack
+- Slides: Pillow
+- Voice: espeak-ng
+- Video: ffmpeg
+- No OpenAI, no Anthropic, no ElevenLabs, no cloud
 
-## Development Notes
-
-- All services run as non-root
-- Healthchecks + restart policies enabled
-- Named volumes for output and n8n data
-- No secrets committed (use `.env`)
-
-This is an aggressive production-ready scaffold. Fill in the real OpenManus logic and you have a working pipeline.
+## Next level (optional)
+- Swap espeak for Piper TTS voice models (still offline)
+- Feed scripts from the ai-ugc content-agent
+- Add your own background clips or music

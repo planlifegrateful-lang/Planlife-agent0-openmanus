@@ -7,16 +7,15 @@ services:
       - "${VIDEO_BUILDER_PORT:-8001}:8001"
     environment:
       - OUTPUT_DIR=/data/output
-      - FLASK_ENV=production
       - PORT=8001
     volumes:
       - video-output:/data/output
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
       interval: 30s
-      timeout: 5s
+      timeout: 8s
       retries: 3
-      start_period: 10s
+      start_period: 15s
 
   webhook-listener:
     build: ./webhook-listener
@@ -44,7 +43,6 @@ services:
     ports:
       - "${OPENMANUS_PORT:-8002}:8002"
     environment:
-      - TZ=UTC
       - PORT=8002
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')"]
