@@ -2,10 +2,10 @@ name: Docker Build Services
 
 on:
   push:
-    branches: [ "main" ]
-    tags: [ 'v*.*.*' ]
+    branches: ["main"]
+    tags: ["v*.*.*"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
   workflow_dispatch:
 
 env:
@@ -21,8 +21,15 @@ jobs:
       id-token: write
 
     strategy:
+      fail-fast: false
       matrix:
-        service: [video-builder, webhook-listener, OpenManus]
+        include:
+          - service: video-builder
+            context: ./video-builder
+          - service: webhook-listener
+            context: ./webhook-listener
+          - service: openmanus
+            context: ./OpenManus
 
     steps:
       - name: Checkout repository
@@ -44,13 +51,18 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.service }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix=
+            type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
-          context: ./${{ matrix.service }}
+          context: ${{ matrix.context }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          provenance: false
