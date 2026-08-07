@@ -1,17 +1,17 @@
 {
-  "name": "UGC Full Pipeline (Content → Video)",
+  "name": "UGC Full Pipeline (Content → Video → Daily)",
   "nodes": [
     {
       "parameters": {
         "rule": {
-          "interval": [{ "field": "hours", "hoursInterval": 24 }]
+          "interval": [{ "field": "cronExpression", "expression": "0 9 * * *" }]
         }
       },
       "id": "schedule-trigger",
-      "name": "Daily Schedule",
+      "name": "Daily 9am",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [200, 300]
+      "position": [180, 280]
     },
     {
       "parameters": {
@@ -24,54 +24,39 @@
       "name": "Manual Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [200, 480],
+      "position": [180, 480],
       "webhookId": "ugc-pipeline"
     },
     {
       "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "id": "topic",
-              "name": "topic",
-              "value": "={{ $json.body.topic || $json.topic || 'morning routine tips' }}",
-              "type": "string"
-            },
-            {
-              "id": "platform",
-              "name": "platform",
-              "value": "={{ $json.body.platform || $json.platform || 'tiktok' }}",
-              "type": "string"
-            }
-          ]
-        },
-        "options": {}
+        "jsCode": "const rotation = [\n  'morning routine tips',\n  'focus and deep work',\n  'habit stacking',\n  'sleep hygiene',\n  'productivity systems',\n  'mindset shifts',\n  'tiny daily wins'\n];\nconst platforms = ['tiktok', 'instagram', 'youtube'];\nconst day = new Date().getDay();\nconst topic = rotation[day % rotation.length];\nconst platform = platforms[day % platforms.length];\nconst body = $input.first().json.body || $input.first().json || {};\nreturn [{ json: {\n  topic: body.topic || topic,\n  platform: body.platform || platform,\n  source: body.topic ? 'webhook' : 'rotation'\n}}];"
       },
-      "id": "set-defaults",
-      "name": "Set Topic + Platform",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [420, 400]
+      "id": "pick-topic",
+      "name": "Pick Topic (rotation or body)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [420, 380]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.CONTENT_AGENT_URL || 'http://host.docker.internal:8100' }}/generate",
+        "url": "https://REPLACE_CONTENT_TUNNEL/generate",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ topic: $json.topic, platform: $json.platform }) }}",
-        "options": { "timeout": 30000 }
+        "options": { "timeout": 60000 }
       },
       "id": "content-gen",
       "name": "Generate Content (ai-ugc)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [640, 400]
+      "position": [640, 380],
+      "notes": "Replace REPLACE_CONTENT_TUNNEL with Cloudflare/ngrok HTTPS URL for port 8100"
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.VIDEO_WEBHOOK_URL || 'http://host.docker.internal:8000' }}/webhook",
+        "url": "https://REPLACE_VIDEO_TUNNEL/webhook",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ title: $json.content.topic || $json.content.hook, script: $json.content.script, prompt: $json.content.script }) }}",
@@ -81,29 +66,30 @@
       "name": "Build Video (Planlife)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [860, 400]
+      "position": [860, 380],
+      "notes": "Replace REPLACE_VIDEO_TUNNEL with Cloudflare/ngrok HTTPS URL for port 8000"
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ status: 'ok', content: $('Generate Content (ai-ugc)').item.json.content, video: $json }) }}",
+        "responseBody": "={{ JSON.stringify({ status: 'ok', topic: $('Pick Topic (rotation or body)').item.json.topic, platform: $('Pick Topic (rotation or body)').item.json.platform, content: $('Generate Content (ai-ugc)').item.json.content, video: $json }) }}",
         "options": {}
       },
       "id": "respond",
       "name": "Respond Success",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [1080, 400]
+      "position": [1080, 380]
     }
   ],
   "connections": {
-    "Daily Schedule": {
-      "main": [[{ "node": "Set Topic + Platform", "type": "main", "index": 0 }]]
+    "Daily 9am": {
+      "main": [[{ "node": "Pick Topic (rotation or body)", "type": "main", "index": 0 }]]
     },
     "Manual Webhook": {
-      "main": [[{ "node": "Set Topic + Platform", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Pick Topic (rotation or body)", "type": "main", "index": 0 }]]
     },
-    "Set Topic + Platform": {
+    "Pick Topic (rotation or body)": {
       "main": [[{ "node": "Generate Content (ai-ugc)", "type": "main", "index": 0 }]]
     },
     "Generate Content (ai-ugc)": {
@@ -115,6 +101,7 @@
   },
   "settings": { "executionOrder": "v1" },
   "meta": {
-    "description": "Import into limitlessmindset.app.n8n.cloud. Set CONTENT_AGENT_URL and VIDEO_WEBHOOK_URL env vars (or replace URLs) to your tunnel/public endpoints."
+    "templateCredsSetupCompleted": true,
+    "description": "Import into limitlessmindset.app.n8n.cloud. Replace REPLACE_CONTENT_TUNNEL and REPLACE_VIDEO_TUNNEL with your public HTTPS tunnel URLs. Daily cron 9am picks rotating topic; webhook accepts {topic, platform}."
   }
 }

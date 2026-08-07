@@ -1,38 +1,62 @@
-# Distribution (Phase 3)
+# Distribution — 4 phases to zero daily decisions
 
-Zero-API generation is done. Publishing to TikTok / Reels / Shorts **requires platform tokens** (you previously asked for no API keys for generation — distribution is optional and separate).
+## Phase 1 — Manual pull (now, zero tokens)
+Run pipeline → MP4 in Docker volume → copy out → upload in apps.
 
-## Option A — Manual (zero tokens)
-1. Run the pipeline → MP4 lands in `video-output` Docker volume
-2. Copy file out:
-   ```bash
-   docker run --rm -v planlife-agent0-openmanus_video-output:/data -v $(pwd)/out:/out alpine cp -r /data/. /out/
-   ```
-3. Upload manually in each app
-
-## Option B — n8n + platform credentials
-When you are ready for auto-post:
-1. Create tokens in TikTok / Meta / YouTube / X developer consoles
-2. In n8n cloud add credentials
-3. After the **Build Video** node, add platform nodes (HTTP Request to each API, or community nodes)
-4. Attach the MP4 (you'll need a public URL or n8n binary handling — often upload to S3/R2 first)
-
-## Option C — Stub webhook for later
-Add a final HTTP Request node that POSTs metadata to your own endpoint:
-```json
-{
-  "title": "...",
-  "script": "...",
-  "filename": "...",
-  "caption": "...",
-  "platform": "tiktok"
-}
+```bash
+mkdir -p out
+docker run --rm \
+  -v planlife-agent0-openmanus_video-output:/data \
+  -v "$(pwd)/out":/out \
+  alpine cp -r /data/. /out/
+ls -la out/
 ```
-You can fill real upload logic later without changing the generation chain.
 
-## Recommended path
-1. Verify E2E locally with `scripts/e2e-local.sh`
-2. Expose local services with Cloudflare Tunnel or ngrok
-3. Import `n8n/full-pipeline-cloud.json` into limitlessmindset.app.n8n.cloud
-4. Point env vars at tunnel URLs
-5. Add distribution only when you have tokens
+## Phase 2 — Alert when done (still zero platform tokens)
+After **Build Video** in n8n, add Email / Telegram / Discord node with:
+- title, script, filename, caption
+You still upload the file yourself; you just get notified.
+
+## Phase 3 — Auto-post (needs tokens)
+1. Create TikTok / Meta / YouTube / X developer apps + tokens
+2. In n8n: credentials for each platform
+3. After Build Video:
+   - Upload MP4 to storage with a public URL (S3, R2, or n8n binary)
+   - Call each platform API or community node
+4. Keep generation zero-API; only distribution uses keys
+
+## Phase 4 — Daily cron endgame (the system)
+Import `n8n/full-pipeline-cloud.json`:
+
+| Time | What happens |
+|------|----------------|
+| 09:00 daily | Schedule fires |
+| | Topic picked from rotation (day of week) |
+| | ai-ugc generates hook/script/caption |
+| | Planlife builds spoken MP4 |
+| | (Phase 3) post to TikTok / Reels / Shorts |
+
+**Zero daily decisions.** You only maintain tunnel URLs + tokens.
+
+### Topic rotation (editable in n8n Code node)
+- morning routine tips
+- focus and deep work
+- habit stacking
+- sleep hygiene
+- productivity systems
+- mindset shifts
+- tiny daily wins
+
+### Webhook override anytime
+```bash
+curl -X POST https://limitlessmindset.app.n8n.cloud/webhook/ugc-pipeline \
+  -H "Content-Type: application/json" \
+  -d '{"topic": "cold exposure", "platform": "tiktok"}'
+```
+
+## Order of operations
+1. `./scripts/e2e-local.sh "morning routine" tiktok` — prove local works
+2. Cloudflare Tunnel both ports — prove cloud can reach you
+3. Import workflow — replace the two `REPLACE_*_TUNNEL` URLs
+4. Activate Daily 9am
+5. Phase 1–2 until tokens; then Phase 3–4
