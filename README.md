@@ -1,56 +1,49 @@
 # Planlife OpenManus Pipeline (Zero-API)
 
-Self-hostable **fully local** video generation pipeline. **No API keys. No cloud AI.**
+Fully local video generation. **No API keys.**
 
-## What it does
+Pillow slides + espeak-ng voice + ffmpeg → real MP4.
 
-1. Receives webhook with title + script/prompt
-2. Builds text slides with Pillow
-3. Generates voiceover with `espeak-ng` (offline TTS)
-4. Assembles real playable MP4 with `ffmpeg`
-5. Saves to volume `/data/output`
-
-Also includes n8n + webhook-listener + placeholder OpenManus service.
-
-## Quick Start
+## 60-second local run
 
 ```bash
 git clone https://github.com/planlifegrateful-lang/Planlife-agent0-openmanus.git
 cd Planlife-agent0-openmanus
 cp .env.example .env
-# only change N8N password if you want
-
 docker compose up --build -d
 
 # Health
 curl http://localhost:8000/health
 curl http://localhost:8001/health
 
-# Generate a real video
+# Real video
 curl -X POST http://localhost:8000/webhook \
   -H "Content-Type: application/json" \
-  -d '{
-    "title": "Morning Routine",
-    "script": "Wake up early. Drink water. Move your body. Win the day."
-  }'
+  -d '{"title":"Morning Routine","script":"Wake up. Drink water. Move. Win."}'
 ```
 
-Videos land in the `video-output` Docker volume.
+## Full chain (content → video)
+
+1. Start **ai-ugc** on :8100  
+2. Start this stack on :8000 / :8001  
+3. Run:
+```bash
+chmod +x scripts/e2e-local.sh
+./scripts/e2e-local.sh "morning routine" tiktok
+```
+
+## n8n Cloud automation
+See **[N8N_CLOUD_SETUP.md](N8N_CLOUD_SETUP.md)**  
+Import **[n8n/full-pipeline-cloud.json](n8n/full-pipeline-cloud.json)** into `limitlessmindset.app.n8n.cloud`
+
+## Distribution
+See **[DISTRIBUTION.md](DISTRIBUTION.md)** (manual now; auto-post when you add tokens)
 
 ## Architecture
-
 ```
-[Webhook / n8n] → webhook-listener:8000 → video-builder:8001 → /data/output/*.mp4
-                                         ↘ openmanus:8002 (optional)
+[Trigger] → ai-ugc :8100 → script/caption
+                ↓
+         Planlife :8000 → real MP4 in video-output volume
+                ↓
+         (optional) n8n → post to platforms
 ```
-
-## Zero-API stack
-- Slides: Pillow
-- Voice: espeak-ng
-- Video: ffmpeg
-- No OpenAI, no Anthropic, no ElevenLabs, no cloud
-
-## Next level (optional)
-- Swap espeak for Piper TTS voice models (still offline)
-- Feed scripts from the ai-ugc content-agent
-- Add your own background clips or music

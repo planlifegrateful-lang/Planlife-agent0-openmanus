@@ -1,0 +1,120 @@
+{
+  "name": "UGC Full Pipeline (Content → Video)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "hours", "hoursInterval": 24 }]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Daily Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ugc-pipeline",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Manual Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 480],
+      "webhookId": "ugc-pipeline"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "topic",
+              "name": "topic",
+              "value": "={{ $json.body.topic || $json.topic || 'morning routine tips' }}",
+              "type": "string"
+            },
+            {
+              "id": "platform",
+              "name": "platform",
+              "value": "={{ $json.body.platform || $json.platform || 'tiktok' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-defaults",
+      "name": "Set Topic + Platform",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [420, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CONTENT_AGENT_URL || 'http://host.docker.internal:8100' }}/generate",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ topic: $json.topic, platform: $json.platform }) }}",
+        "options": { "timeout": 30000 }
+      },
+      "id": "content-gen",
+      "name": "Generate Content (ai-ugc)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [640, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.VIDEO_WEBHOOK_URL || 'http://host.docker.internal:8000' }}/webhook",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ title: $json.content.topic || $json.content.hook, script: $json.content.script, prompt: $json.content.script }) }}",
+        "options": { "timeout": 180000 }
+      },
+      "id": "video-build",
+      "name": "Build Video (Planlife)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [860, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'ok', content: $('Generate Content (ai-ugc)').item.json.content, video: $json }) }}",
+        "options": {}
+      },
+      "id": "respond",
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1080, 400]
+    }
+  ],
+  "connections": {
+    "Daily Schedule": {
+      "main": [[{ "node": "Set Topic + Platform", "type": "main", "index": 0 }]]
+    },
+    "Manual Webhook": {
+      "main": [[{ "node": "Set Topic + Platform", "type": "main", "index": 0 }]]
+    },
+    "Set Topic + Platform": {
+      "main": [[{ "node": "Generate Content (ai-ugc)", "type": "main", "index": 0 }]]
+    },
+    "Generate Content (ai-ugc)": {
+      "main": [[{ "node": "Build Video (Planlife)", "type": "main", "index": 0 }]]
+    },
+    "Build Video (Planlife)": {
+      "main": [[{ "node": "Respond Success", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "meta": {
+    "description": "Import into limitlessmindset.app.n8n.cloud. Set CONTENT_AGENT_URL and VIDEO_WEBHOOK_URL env vars (or replace URLs) to your tunnel/public endpoints."
+  }
+}
