@@ -1,49 +1,69 @@
 # Planlife OpenManus Pipeline (Zero-API)
 
-Fully local video generation. **No API keys.**
+Fully local video generation. **No API keys. No Docker required.**
 
 Pillow slides + espeak-ng voice + ffmpeg → real MP4.
 
-## 60-second local run
+---
+
+## Fastest path (Native – recommended)
 
 ```bash
 git clone https://github.com/planlifegrateful-lang/Planlife-agent0-openmanus.git
 cd Planlife-agent0-openmanus
-cp .env.example .env
-docker compose up --build -d
 
-# Health
-curl http://localhost:8000/health
-curl http://localhost:8001/health
+# System deps (Ubuntu/Debian)
+sudo apt update && sudo apt install -y ffmpeg espeak-ng fonts-dejavu-core python3-venv
 
-# Real video
-curl -X POST http://localhost:8000/webhook \
+# One command start
+bash OpenManus/start-native.sh
+```
+
+Then:
+```bash
+curl -X POST http://127.0.0.1:8000/webhook \
   -H "Content-Type: application/json" \
   -d '{"title":"Morning Routine","script":"Wake up. Drink water. Move. Win."}'
 ```
 
-## Full chain (content → video)
+Videos appear in `./output/`
 
-1. Start **ai-ugc** on :8100  
-2. Start this stack on :8000 / :8001  
-3. Run:
+### Termux (Android)
 ```bash
-chmod +x scripts/e2e-local.sh
-./scripts/e2e-local.sh "morning routine" tiktok
+bash OpenManus/start-termux.sh
 ```
 
-## n8n Cloud automation
-See **[N8N_CLOUD_SETUP.md](N8N_CLOUD_SETUP.md)**  
-Import **[n8n/full-pipeline-cloud.json](n8n/full-pipeline-cloud.json)** into `limitlessmindset.app.n8n.cloud`
+### Manus / OpenManus agent
+See prompts in `OpenManus/TASK_PROMPT_*.md`
 
-## Distribution
-See **[DISTRIBUTION.md](DISTRIBUTION.md)** (manual now; auto-post when you add tokens)
+---
+
+## Docker path (optional)
+
+```bash
+cp .env.example .env
+docker compose up --build -d
+curl http://localhost:8000/health
+```
+
+---
+
+## Ports
+| Service            | Port |
+|--------------------|------|
+| Content Agent      | 8100 |
+| Webhook Listener   | 8000 |
+| Video Builder      | 8001 |
 
 ## Architecture
 ```
 [Trigger] → ai-ugc :8100 → script/caption
                 ↓
-         Planlife :8000 → real MP4 in video-output volume
+         Planlife :8000 → real MP4 in ./output
                 ↓
          (optional) n8n → post to platforms
 ```
+
+## n8n Cloud
+See [N8N_CLOUD_SETUP.md](N8N_CLOUD_SETUP.md)  
+Import [n8n/full-pipeline-cloud.json](n8n/full-pipeline-cloud.json)

@@ -13,8 +13,9 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-OUTPUT_DIR = os.environ.get("OUTPUT_DIR", "/data/output")
-WORK_DIR = "/tmp/work"
+# Native-friendly defaults (Docker still works via env)
+OUTPUT_DIR = os.environ.get("OUTPUT_DIR", os.path.join(os.getcwd(), "output"))
+WORK_DIR = os.environ.get("WORK_DIR", "/tmp/planlife-work")
 
 # Vertical 9:16 for shorts
 WIDTH, HEIGHT = 1080, 1920
@@ -29,15 +30,19 @@ def safe_name(title: str) -> str:
     return "".join(c if c.isalnum() or c in (" ", "-", "_") else "_" for c in title).strip() or "video"
 
 def get_font(size: int):
-    # Prefer DejaVu (usually present), fall back to default
     candidates = [
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
         "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+        "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+        "/System/Library/Fonts/Helvetica.ttc",
     ]
     for path in candidates:
         if os.path.exists(path):
-            return ImageFont.truetype(path, size)
+            try:
+                return ImageFont.truetype(path, size)
+            except Exception:
+                continue
     return ImageFont.load_default()
 
 def make_slide(text: str, bg: tuple, out_path: str, title_mode: bool = False):
@@ -46,7 +51,6 @@ def make_slide(text: str, bg: tuple, out_path: str, title_mode: bool = False):
     font_size = 72 if title_mode else 56
     font = get_font(font_size)
 
-    # Word wrap
     max_chars = 28 if title_mode else 32
     lines = []
     for paragraph in text.split("\n"):
@@ -60,7 +64,6 @@ def make_slide(text: str, bg: tuple, out_path: str, title_mode: bool = False):
         bbox = draw.textbbox((0, 0), line, font=font)
         w = bbox[2] - bbox[0]
         x = (WIDTH - w) // 2
-        # subtle shadow
         draw.text((x + 3, y + 3), line, font=font, fill=(0, 0, 0))
         draw.text((x, y), line, font=font, fill=(240, 240, 245))
         y += line_height
@@ -68,12 +71,10 @@ def make_slide(text: str, bg: tuple, out_path: str, title_mode: bool = False):
     img.save(out_path, "PNG")
 
 def split_script(script: str, max_chunks: int = 5):
-    # Split into short sentences for slides
     parts = [p.strip() for p in script.replace("!", ".").replace("?", ".").split(".") if p.strip()]
     if not parts:
         parts = [script.strip() or "Create. Ship. Repeat."]
     if len(parts) > max_chunks:
-        # merge extras into last
         head = parts[: max_chunks - 1]
         tail = " ".join(parts[max_chunks - 1 :])
         parts = head + [tail]
@@ -98,23 +99,21 @@ def build_video(title: str, script: str) -> dict:
     final_mp4 = out_dir / f"{name}_{ts}.mp4"
 
     try:
-        # 1. Voiceover with espeak-ng (offline)
         wav_path = work / "voice.wav"
         speak_text = f"{title}. {script}"
+        tts_bin = "espeak-ng" if shutil.which("espeak-ng") else "espeak"
         run_cmd([
-            "espeak-ng",
-            "-s", "145",          # speed
-            "-a", "140",          # amplitude
+            tts_bin,
+            "-s", "145",
+            "-a", "140",
             "-w", str(wav_path),
             speak_text,
         ])
 
-        # 2. Slides
         chunks = split_script(script)
         slide_paths = []
         bg = BG_COLORS[ts % len(BG_COLORS)]
 
-        # Title slide
         title_slide = work / "slide_00.png"
         make_slide(title, bg, str(title_slide), title_mode=True)
         slide_paths.append(title_slide)
@@ -124,7 +123,6 @@ def build_video(title: str, script: str) -> dict:
             make_slide(chunk, bg, str(p))
             slide_paths.append(p)
 
-        # 3. Get audio duration
         probe = run_cmd([
             "ffprobe", "-v", "error",
             "-show_entries", "format=duration",
@@ -134,13 +132,11 @@ def build_video(title: str, script: str) -> dict:
         duration = float(probe.stdout.strip() or "5")
         per_slide = max(1.5, duration / len(slide_paths))
 
-        # 4. Create slideshow video from images
         list_file = work / "slides.txt"
         with open(list_file, "w") as f:
             for p in slide_paths:
                 f.write(f"file '{p}'\n")
                 f.write(f"duration {per_slide:.2f}\n")
-            # last frame needs to be repeated for concat demuxer
             f.write(f"file '{slide_paths[-1]}'\n")
 
         silent_video = work / "silent.mp4"
@@ -154,7 +150,6 @@ def build_video(title: str, script: str) -> dict:
             str(silent_video),
         ])
 
-        # 5. Mux audio + video
         run_cmd([
             "ffmpeg", "-y",
             "-i", str(silent_video),
@@ -180,7 +175,6 @@ def build_video(title: str, script: str) -> dict:
             "note": "Real MP4 with offline TTS + slides. No API keys used.",
         }
     finally:
-        # cleanup work dir
         shutil.rmtree(work, ignore_errors=True)
 
 @app.route("/health", methods=["GET"])
@@ -191,6 +185,7 @@ def health():
         "mode": "local-zero-api",
         "tts": "espeak-ng",
         "video": "ffmpeg + pillow",
+        "output_dir": OUTPUT_DIR,
     })
 
 @app.route("/build", methods=["POST"])
