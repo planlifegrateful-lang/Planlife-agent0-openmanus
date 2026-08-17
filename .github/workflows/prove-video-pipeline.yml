@@ -1,0 +1,94 @@
+name: Prove Video Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      title:
+        description: Video title
+        required: true
+        default: Limitless Mindset — Start Before You Feel Ready
+      script:
+        description: Script text for the proof video
+        required: true
+        default: Stop waiting for perfect conditions. Start with what you have. Build one useful thing, publish it, and keep improving. Small consistent action compounds.
+  push:
+    paths:
+      - 'video-builder/**'
+      - '.github/workflows/prove-video-pipeline.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-proof-video:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install runtime dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg espeak-ng fonts-dejavu-core
+          python3 -m pip install --upgrade pip
+          python3 -m pip install flask pillow requests
+
+      - name: Start video builder
+        working-directory: video-builder
+        env:
+          PORT: '8001'
+          OUTPUT_DIR: ${{ github.workspace }}/output
+        run: |
+          nohup python3 app.py > /tmp/video-builder.log 2>&1 &
+          echo $! > /tmp/video-builder.pid
+          for i in {1..20}; do
+            if curl -fsS http://127.0.0.1:8001/health; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/video-builder.log
+          exit 1
+
+      - name: Build real MP4
+        env:
+          TITLE: ${{ inputs.title || 'Limitless Mindset — Start Before You Feel Ready' }}
+          SCRIPT: ${{ inputs.script || 'Stop waiting for perfect conditions. Start with what you have. Build one useful thing, publish it, and keep improving. Small consistent action compounds.' }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request
+          payload = json.dumps({
+              'title': os.environ['TITLE'],
+              'script': os.environ['SCRIPT']
+          }).encode()
+          req = urllib.request.Request(
+              'http://127.0.0.1:8001/build',
+              data=payload,
+              headers={'Content-Type': 'application/json'},
+              method='POST'
+          )
+          with urllib.request.urlopen(req, timeout=180) as r:
+              result = json.load(r)
+          print(json.dumps(result, indent=2))
+          if result.get('status') != 'ok' or not result.get('size_bytes', 0) > 0:
+              raise SystemExit('Video build did not produce a valid MP4')
+          PY
+
+      - name: Validate MP4
+        run: |
+          test -n "$(find output -type f -name '*.mp4' -print -quit)"
+          ffprobe -v error -show_entries format=duration,size -of json output/*.mp4
+
+      - name: Upload proof video
+        uses: actions/upload-artifact@v4
+        with:
+          name: proof-video-${{ github.run_number }}
+          path: output/*.mp4
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish proof summary
+        run: |
+          echo "## Pipeline proof" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Real MP4 generated: YES" >> "$GITHUB_STEP_SUMMARY"
+          echo "- TTS: espeak-ng" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Rendering: Pillow + FFmpeg" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Artifact: proof-video-${{ github.run_number }}" >> "$GITHUB_STEP_SUMMARY"
