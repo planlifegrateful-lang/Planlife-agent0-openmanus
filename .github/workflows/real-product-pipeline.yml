@@ -1,0 +1,127 @@
+name: Build Real Limitless Mindset Product
+
+on:
+  push:
+    paths:
+      - '.github/workflows/real-product-pipeline.yml'
+      - 'video-builder/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-real-product:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg espeak-ng fonts-dejavu-core python3-venv
+
+      - name: Create isolated Python environment
+        run: |
+          python3 -m venv .venv
+          . .venv/bin/activate
+          python -m pip install --upgrade pip
+          python -m pip install flask pillow reportlab requests
+
+      - name: Start video builder
+        working-directory: video-builder
+        env:
+          PORT: '8001'
+          OUTPUT_DIR: ${{ github.workspace }}/output
+        run: |
+          ../.venv/bin/python app.py > /tmp/video-builder.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8001/health; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/video-builder.log
+          exit 1
+
+      - name: Generate real product video
+        run: |
+          .venv/bin/python - <<'PY'
+          import json, urllib.request
+          title = 'Limitless Mindset — 7-Day Discipline Reset'
+          script = ('A practical seven-day reset for people who are tired of waiting for motivation. '
+                    'Day one choose one priority. Day two remove one distraction. '
+                    'Day three work for twenty five focused minutes. Day four finish one small task. '
+                    'Day five publish something useful. Day six review what worked. '
+                    'Day seven choose the next seven-day target. The goal is not perfection. '
+                    'The goal is consistent action.')
+          payload = json.dumps({'title': title, 'script': script}).encode()
+          req = urllib.request.Request('http://127.0.0.1:8001/build', data=payload,
+              headers={'Content-Type':'application/json'}, method='POST')
+          with urllib.request.urlopen(req, timeout=300) as r:
+              result = json.load(r)
+          print(json.dumps(result, indent=2))
+          if result.get('status') != 'ok' or not result.get('size_bytes', 0) > 0:
+              raise SystemExit('Real product video was not produced')
+          PY
+
+      - name: Generate product workbook PDF
+        run: |
+          .venv/bin/python - <<'PY'
+          from pathlib import Path
+          from reportlab.lib.pagesizes import LETTER
+          from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
+          from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+          from reportlab.lib.enums import TA_CENTER
+          out = Path('output'); out.mkdir(exist_ok=True)
+          pdf = out / 'Limitless-Mindset-7-Day-Discipline-Reset.pdf'
+          styles = getSampleStyleSheet()
+          title = ParagraphStyle('ProductTitle', parent=styles['Title'], alignment=TA_CENTER, spaceAfter=24)
+          doc = SimpleDocTemplate(str(pdf), pagesize=LETTER, rightMargin=54, leftMargin=54, topMargin=54, bottomMargin=54)
+          story = [Paragraph('LIMITLESS MINDSET', title), Paragraph('7-Day Discipline Reset', title),
+                   Paragraph('A practical seven-day reset designed to turn intention into consistent action.', styles['BodyText']), PageBreak()]
+          days = [
+            ('Day 1 — Choose One Priority', 'Write down the one outcome that would make today meaningful. Ignore everything that does not support it.'),
+            ('Day 2 — Remove One Distraction', 'Delete, block, mute, or physically move one thing that repeatedly steals your attention.'),
+            ('Day 3 — Twenty-Five Focused Minutes', 'Set a timer for 25 minutes. Work on the priority without switching tasks. Record what moved forward.'),
+            ('Day 4 — Finish One Small Task', 'Choose a task that can actually be completed today. Finish it instead of collecting more unfinished work.'),
+            ('Day 5 — Publish Something Useful', 'Share one useful idea, lesson, resource, or piece of work. Progress becomes valuable when it reaches another person.'),
+            ('Day 6 — Review', 'Write three things that worked, one thing that failed, and one change you will make tomorrow.'),
+            ('Day 7 — Set the Next Seven-Day Target', 'Choose one measurable target for the next seven days. Keep it specific enough that success can be verified.'),
+          ]
+          for heading, body in days:
+              story += [Paragraph(heading, styles['Heading2']), Paragraph(body, styles['BodyText']), Spacer(1, 16)]
+          story += [Paragraph('Daily commitment: I will take the next useful action before I wait for motivation.', styles['BodyText'])]
+          doc.build(story)
+          print(pdf)
+          PY
+
+      - name: Validate and package product
+        run: |
+          test -s output/*.mp4
+          test -s output/Limitless-Mindset-7-Day-Discipline-Reset.pdf
+          ffprobe -v error -show_entries format=duration,size -of json output/*.mp4
+          cd output
+          zip -9 ../Limitless-Mindset-7-Day-Discipline-Reset.zip *.mp4 *.pdf
+          cd ..
+          test -s Limitless-Mindset-7-Day-Discipline-Reset.zip
+          ls -lh output/ Limitless-Mindset-7-Day-Discipline-Reset.zip
+
+      - name: Upload finished product
+        uses: actions/upload-artifact@v4
+        with:
+          name: Limitless-Mindset-7-Day-Discipline-Reset-${{ github.run_number }}
+          path: |
+            Limitless-Mindset-7-Day-Discipline-Reset.zip
+            output/*.mp4
+            output/*.pdf
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Proof summary
+        run: |
+          echo '## REAL PRODUCT PROOF' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Product: Limitless Mindset — 7-Day Discipline Reset' >> "$GITHUB_STEP_SUMMARY"
+          echo '- MP4: GENERATED AND VALIDATED' >> "$GITHUB_STEP_SUMMARY"
+          echo '- PDF workbook: GENERATED' >> "$GITHUB_STEP_SUMMARY"
+          echo '- ZIP delivery package: GENERATED' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Paid API keys required: NO' >> "$GITHUB_STEP_SUMMARY"
