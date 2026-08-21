@@ -13,19 +13,98 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Native-friendly defaults (Docker still works via env)
+# ── Config ──────────────────────────────────────────────────────────────────
 OUTPUT_DIR = os.environ.get("OUTPUT_DIR", os.path.join(os.getcwd(), "output"))
 WORK_DIR = os.environ.get("WORK_DIR", "/tmp/planlife-work")
+TTS_ENGINE = os.environ.get("TTS_ENGINE", "auto").lower()  # auto | chatterbox | espeak | elevenlabs
+VOICE_REF_PATH = os.environ.get("VOICE_REF_PATH", "")  # path to 5-10s reference wav for cloning
+ELEVENLABS_API_KEY = os.environ.get("ELEVENLABS_API_KEY", "")
+ELEVENLABS_VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM")  # Rachel default
 
-# Vertical 9:16 for shorts
 WIDTH, HEIGHT = 1080, 1920
 BG_COLORS = [
-    (15, 23, 42),    # slate
-    (30, 27, 75),    # indigo
-    (20, 40, 30),    # forest
-    (40, 20, 30),    # wine
+    (15, 23, 42), (30, 27, 75), (20, 40, 30), (40, 20, 30),
 ]
 
+# ── TTS Engines ─────────────────────────────────────────────────────────────
+_chatterbox_model = None
+
+def get_chatterbox():
+    global _chatterbox_model
+    if _chatterbox_model is not None:
+        return _chatterbox_model
+    try:
+        import torch
+        from chatterbox.tts import ChatterboxTTS
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        logger.info(f"Loading Chatterbox TTS on {device}...")
+        _chatterbox_model = ChatterboxTTS.from_pretrained(device=device)
+        logger.info("Chatterbox ready")
+        return _chatterbox_model
+    except Exception as e:
+        logger.warning(f"Chatterbox not available: {e}")
+        return None
+
+def tts_espeak(text: str, wav_path: Path):
+    tts_bin = "espeak-ng" if shutil.which("espeak-ng") else "espeak"
+    if not shutil.which(tts_bin):
+        raise RuntimeError("espeak-ng / espeak not found")
+    run_cmd([tts_bin, "-s", "145", "-a", "140", "-w", str(wav_path), text])
+
+def tts_chatterbox(text: str, wav_path: Path):
+    model = get_chatterbox()
+    if model is None:
+        raise RuntimeError("Chatterbox model failed to load")
+    import torchaudio as ta
+    kwargs = {}
+    if VOICE_REF_PATH and Path(VOICE_REF_PATH).exists():
+        kwargs["audio_prompt_path"] = VOICE_REF_PATH
+        logger.info(f"Cloning voice from {VOICE_REF_PATH}")
+    wav = model.generate(text, **kwargs)
+    ta.save(str(wav_path), wav, model.sr)
+
+def tts_elevenlabs(text: str, wav_path: Path):
+    if not ELEVENLABS_API_KEY:
+        raise RuntimeError("ELEVENLABS_API_KEY not set")
+    import requests
+    url = f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVENLABS_VOICE_ID}"
+    headers = {
+        "Accept": "audio/mpeg",
+        "Content-Type": "application/json",
+        "xi-api-key": ELEVENLABS_API_KEY,
+    }
+    payload = {
+        "text": text,
+        "model_id": "eleven_multilingual_v2",
+        "voice_settings": {"stability": 0.5, "similarity_boost": 0.75},
+    }
+    r = requests.post(url, json=payload, headers=headers, timeout=60)
+    r.raise_for_status()
+    mp3_path = wav_path.with_suffix(".mp3")
+    mp3_path.write_bytes(r.content)
+    # convert to wav for ffmpeg compatibility
+    run_cmd(["ffmpeg", "-y", "-i", str(mp3_path), str(wav_path)])
+    mp3_path.unlink(missing_ok=True)
+
+def synthesize_voice(text: str, wav_path: Path) -> str:
+    """Returns the engine name used."""
+    engine = TTS_ENGINE
+    if engine == "auto":
+        if get_chatterbox() is not None:
+            engine = "chatterbox"
+        else:
+            engine = "espeak"
+
+    logger.info(f"TTS engine: {engine}")
+    if engine == "chatterbox":
+        tts_chatterbox(text, wav_path)
+    elif engine == "elevenlabs":
+        tts_elevenlabs(text, wav_path)
+    else:
+        tts_espeak(text, wav_path)
+    return engine
+
+# ── Helpers ─────────────────────────────────────────────────────────────────
 def safe_name(title: str) -> str:
     return "".join(c if c.isalnum() or c in (" ", "-", "_") else "_" for c in title).strip() or "video"
 
@@ -50,16 +129,13 @@ def make_slide(text: str, bg: tuple, out_path: str, title_mode: bool = False):
     draw = ImageDraw.Draw(img)
     font_size = 72 if title_mode else 56
     font = get_font(font_size)
-
     max_chars = 28 if title_mode else 32
     lines = []
     for paragraph in text.split("\n"):
         lines.extend(textwrap.wrap(paragraph, width=max_chars) or [""])
-
     line_height = font_size + 18
     total_h = len(lines) * line_height
     y = (HEIGHT - total_h) // 2
-
     for line in lines:
         bbox = draw.textbbox((0, 0), line, font=font)
         w = bbox[2] - bbox[0]
@@ -67,7 +143,6 @@ def make_slide(text: str, bg: tuple, out_path: str, title_mode: bool = False):
         draw.text((x + 3, y + 3), line, font=font, fill=(0, 0, 0))
         draw.text((x, y), line, font=font, fill=(240, 240, 245))
         y += line_height
-
     img.save(out_path, "PNG")
 
 def split_script(script: str, max_chunks: int = 5):
@@ -88,6 +163,7 @@ def run_cmd(cmd: list, timeout: int = 120):
         raise RuntimeError(f"Command failed: {cmd[0]} → {result.stderr[:400]}")
     return result
 
+# ── Core ────────────────────────────────────────────────────────────────────
 def build_video(title: str, script: str) -> dict:
     ts = int(time.time())
     name = safe_name(title).replace(" ", "_")
@@ -95,20 +171,13 @@ def build_video(title: str, script: str) -> dict:
     work.mkdir(parents=True, exist_ok=True)
     out_dir = Path(OUTPUT_DIR)
     out_dir.mkdir(parents=True, exist_ok=True)
-
     final_mp4 = out_dir / f"{name}_{ts}.mp4"
 
     try:
         wav_path = work / "voice.wav"
         speak_text = f"{title}. {script}"
-        tts_bin = "espeak-ng" if shutil.which("espeak-ng") else "espeak"
-        run_cmd([
-            tts_bin,
-            "-s", "145",
-            "-a", "140",
-            "-w", str(wav_path),
-            speak_text,
-        ])
+
+        engine_used = synthesize_voice(speak_text, wav_path)
 
         chunks = split_script(script)
         slide_paths = []
@@ -161,7 +230,7 @@ def build_video(title: str, script: str) -> dict:
         ])
 
         size = final_mp4.stat().st_size if final_mp4.exists() else 0
-        logger.info("Built real video: %s (%s bytes)", final_mp4.name, size)
+        logger.info("Built real video: %s (%s bytes) engine=%s", final_mp4.name, size, engine_used)
 
         return {
             "status": "ok",
@@ -171,20 +240,26 @@ def build_video(title: str, script: str) -> dict:
             "duration_sec": round(duration, 1),
             "slides": len(slide_paths),
             "size_bytes": size,
-            "mode": "local-zero-api",
-            "note": "Real MP4 with offline TTS + slides. No API keys used.",
+            "tts_engine": engine_used,
+            "mode": "ai-voice-cloning" if engine_used != "espeak" else "local-zero-api",
+            "note": f"Real MP4 with {engine_used} TTS + slides.",
         }
     finally:
         shutil.rmtree(work, ignore_errors=True)
 
 @app.route("/health", methods=["GET"])
 def health():
+    engines = ["espeak"]
+    if get_chatterbox() is not None:
+        engines.insert(0, "chatterbox")
+    if ELEVENLABS_API_KEY:
+        engines.append("elevenlabs")
     return jsonify({
         "status": "ok",
         "service": "video-builder",
-        "mode": "local-zero-api",
-        "tts": "espeak-ng",
-        "video": "ffmpeg + pillow",
+        "tts_engine": TTS_ENGINE,
+        "available_engines": engines,
+        "voice_ref": bool(VOICE_REF_PATH and Path(VOICE_REF_PATH).exists()),
         "output_dir": OUTPUT_DIR,
     })
 
