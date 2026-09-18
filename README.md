@@ -6,6 +6,36 @@ Pillow slides + espeak-ng voice + ffmpeg → real MP4.
 
 ---
 
+## Local Control Plane (NEW)
+
+One entrypoint for everything:
+
+```bash
+./scripts/control.sh help
+```
+
+| Command | What it does |
+|---------|--------------|
+| `start [--native]` | Start full stack (Docker or native) |
+| `stop` | Clean stop of everything |
+| `check` | Live ports + Docker + HTTP health matrix |
+| `smoke` | Ultra-fast individual probes |
+| `e2e [topic] [platform]` | Full content → video end-to-end test |
+| `logs [service]` | Tail logs |
+| `debug` | Full environment dump for support |
+
+Examples:
+```bash
+./scripts/control.sh start
+./scripts/control.sh check
+./scripts/control.sh e2e "morning gratitude" tiktok
+./scripts/control.sh logs webhook-listener
+```
+
+Make scripts executable once: `chmod +x scripts/*.sh`
+
+---
+
 ## Fastest path (Native – recommended)
 
 ```bash
