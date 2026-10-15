@@ -78,7 +78,7 @@ def probe_duration(path: Path) -> float:
 
 def assemble(input_dir: Path, output: Path, duration: float = 120,
              music: Path | None = None, fps: int = FPS) -> dict:
-    """Create a 9:16 video with equal-time clip segments and optional background music."""
+    """Create a 9:16 video preserving clip lengths and optionally adding background music."""
     if shutil.which("ffmpeg") is None or shutil.which("ffprobe") is None:
         raise RuntimeError("FFmpeg and FFprobe are required. Install FFmpeg and try again.")
     clips = discover_clips(input_dir)
@@ -109,7 +109,7 @@ def assemble(input_dir: Path, output: Path, duration: float = 120,
         )
         video_labels.append(f"[{label}]")
     filters.append(
-        "".join(video_labels) + f"concat=n={len(clips)}:v=1:a=0[vout]"
+        "".join(video_labels) + f"concat=n={len(playlist)}:v=1:a=0[vout]"
     )
 
     if music is not None:
