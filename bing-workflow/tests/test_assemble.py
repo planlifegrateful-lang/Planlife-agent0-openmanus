@@ -12,15 +12,18 @@ SPEC.loader.exec_module(MODULE)
 
 
 class DurationTests(unittest.TestCase):
-    def test_duration_is_distributed(self):
-        parts = MODULE.segment_durations(120, 7)
-        self.assertEqual(len(parts), 7)
-        self.assertAlmostEqual(sum(parts), 120)
-        self.assertTrue(all(p > 0 for p in parts))
+    def test_playlist_repeats_clip_sequence_to_target(self):
+        clips = [Path("clip1.mp4"), Path("clip2.mp4")]
+        playlist = MODULE.build_playlist(clips, [5, 7], 20)
+        self.assertEqual([p.name for p, _ in playlist],
+                         ["clip1.mp4", "clip2.mp4", "clip1.mp4", "clip2.mp4"])
+        self.assertEqual([seconds for _, seconds in playlist], [5, 7, 5, 3])
+        self.assertAlmostEqual(sum(seconds for _, seconds in playlist), 20)
+
 
     def test_invalid_duration_rejected(self):
         with self.assertRaises(ValueError):
-            MODULE.segment_durations(0, 2)
+            MODULE.build_playlist([Path("clip1.mp4")], [1], 0)
 
     def test_natural_sort(self):
         names = sorted(
@@ -51,6 +54,7 @@ class IntegrationTests(unittest.TestCase):
             self.assertEqual(result["status"], "ok")
             self.assertEqual(result["resolution"], "1080x1920")
             self.assertEqual(result["clip_count"], 3)
+            self.assertEqual(result["scene_count"], 6)
             self.assertAlmostEqual(result["duration_seconds"], 6, delta=0.25)
             probe = subprocess.run([
                 "ffprobe", "-v", "error", "-select_streams", "v:0",
