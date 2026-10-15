@@ -85,3 +85,22 @@ curl http://localhost:8000/health
 ## n8n Cloud
 See [N8N_CLOUD_SETUP.md](N8N_CLOUD_SETUP.md)  
 Import [n8n/full-pipeline-cloud.json](n8n/full-pipeline-cloud.json)
+
+
+---
+
+## Bing Video Creator clips → 2-minute vertical master
+
+Use the local assembler for clips you generated and downloaded yourself in Bing Video Creator. It requires no API keys and does not automate Bing or bypass Microsoft's limits.
+
+See [Bing Clip Studio setup](bing-workflow/README.md) and the [faceless prompt pack](bing-workflow/PROMPT_PACK.md).
+
+Quick start from the repository root after installing FFmpeg/FFprobe:
+
+```bash
+mkdir -p bing-workflow/input
+# Copy downloaded, numbered clips into bing-workflow/input/ (clip01.mp4, clip02.mp4, ...)
+python3 bing-workflow/assemble.py
+```
+
+Output: `output/bing-master-2min.mp4`. Optional licensed music: `python3 bing-workflow/assemble.py --music path/to/music.mp3`. The default export is silent so you can add narration, captions, and platform-approved music in your editor.

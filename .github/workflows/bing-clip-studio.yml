@@ -1,0 +1,37 @@
+name: Bing Clip Studio Tests
+
+on:
+  push:
+    paths:
+      - "bing-workflow/**"
+      - ".github/workflows/bing-clip-studio.yml"
+  pull_request:
+    paths:
+      - "bing-workflow/**"
+      - ".github/workflows/bing-clip-studio.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-assembler:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Check Python version
+        run: python3 --version
+
+      - name: Run unit and video integration tests
+        run: python3 -m unittest discover -s bing-workflow/tests -v
+
+      - name: Verify command help
+        run: python3 bing-workflow/assemble.py --help
