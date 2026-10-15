@@ -42,16 +42,25 @@ def discover_clips(input_dir: Path) -> list[Path]:
     return clips
 
 
-def segment_durations(total_seconds: float, count: int) -> list[float]:
+def build_playlist(clips: list[Path], source_durations: list[float],
+                   total_seconds: float) -> list[tuple[Path, float]]:
+    """Repeat the ordered clip sequence as needed, preserving natural clip lengths."""
     if total_seconds <= 0:
         raise ValueError("Duration must be greater than zero.")
-    if count < 1:
-        raise ValueError("At least one clip is required.")
-    each = total_seconds / count
-    durations = [each] * count
-    # Avoid rounding drift: make the final segment absorb the remainder.
-    durations[-1] = total_seconds - sum(durations[:-1])
-    return durations
+    if not clips or len(clips) != len(source_durations):
+        raise ValueError("At least one clip and its duration are required.")
+    if any(seconds <= 0 for seconds in source_durations):
+        raise ValueError("Every input clip must have a measurable duration greater than zero.")
+    playlist = []
+    remaining = total_seconds
+    while remaining > 0.000001:
+        for clip, source_seconds in zip(clips, source_durations):
+            if remaining <= 0.000001:
+                break
+            segment = min(source_seconds, remaining)
+            playlist.append((clip, segment))
+            remaining -= segment
+    return playlist
 
 
 def run_checked(command: list[str]) -> subprocess.CompletedProcess:
@@ -73,6 +82,8 @@ def assemble(input_dir: Path, output: Path, duration: float = 120,
     if shutil.which("ffmpeg") is None or shutil.which("ffprobe") is None:
         raise RuntimeError("FFmpeg and FFprobe are required. Install FFmpeg and try again.")
     clips = discover_clips(input_dir)
+    source_durations = [probe_duration(clip) for clip in clips]
+    playlist = build_playlist(clips, source_durations, duration)
     if music is not None and (not music.is_file()):
         raise ValueError(f"Music file not found: {music}")
     if music is not None and music.resolve() == output.resolve():
@@ -81,17 +92,15 @@ def assemble(input_dir: Path, output: Path, duration: float = 120,
         raise ValueError("Output file must be outside the input clip folder.")
 
     output.parent.mkdir(parents=True, exist_ok=True)
-    durations = segment_durations(duration, len(clips))
     command = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y"]
-    for clip in clips:
-        # Loop short clips if needed so every scene can fill its assigned segment.
-        command.extend(["-stream_loop", "-1", "-i", str(clip)])
+    for clip, _seconds in playlist:
+        command.extend(["-i", str(clip)])
     if music is not None:
         command.extend(["-stream_loop", "-1", "-i", str(music)])
 
     filters = []
     video_labels = []
-    for i, seconds in enumerate(durations):
+    for i, (clip, seconds) in enumerate(playlist):
         label = f"v{i}"
         filters.append(
             f"[{i}:v:0]scale={WIDTH}:{HEIGHT}:force_original_aspect_ratio=increase,"
@@ -104,7 +113,7 @@ def assemble(input_dir: Path, output: Path, duration: float = 120,
     )
 
     if music is not None:
-        music_index = len(clips)
+        music_index = len(playlist)
         fade_start = max(0, duration - min(2.0, duration / 4))
         fade_len = min(2.0, duration / 4)
         filters.append(
@@ -140,6 +149,7 @@ def assemble(input_dir: Path, output: Path, duration: float = 120,
         "status": "ok",
         "output": str(output.resolve()),
         "clip_count": len(clips),
+        "scene_count": len(playlist),
         "duration_seconds": round(actual_duration, 3),
         "resolution": f"{WIDTH}x{HEIGHT}",
         "fps": fps,
