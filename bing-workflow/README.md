@@ -7,7 +7,7 @@ This folder adds a **local clip assembler** to Planlife's existing zero-API vide
 1. You generate clips in Bing Video Creator using your Microsoft account.
 2. You download the clips yourself and place them in `bing-workflow/input/`.
 3. A local Python script uses FFmpeg to combine them into one vertical 1080×1920 MP4.
-4. Clips are sorted by filename (`clip1.mp4`, `clip2.mp4`, …) and given equal screen time. If a clip is too short, it loops to fill its segment.
+4. Clips are sorted by filename (`clip01.mp4`, `clip02.mp4`, …) and kept at their natural durations. If the total clip runtime is under two minutes, the ordered clip sequence repeats until the target length is reached; the final clip is trimmed to fit exactly.
 5. Optionally, add a music file you have permission to use. Music is mixed at 18% volume and faded out at the end.
 
 **Important limitations:** This does not call Bing, automate Bing sign-in/downloads, or bypass any generation limits. It cannot make Bing itself unlimited. Bing's available features and limits are controlled by Microsoft. The output is silent unless you pass `--music`; add narration/captions in your preferred editor afterward.
