@@ -34,3 +34,7 @@ Copy any `TASK_PROMPT_*.md` content and paste into Manus AI or local OpenManus.
 - Content Agent: 8100
 - Webhook Listener: 8000
 - Video Builder: 8001
+
+## Kareem execution master prompt (2027)
+
+Use [`TASK_PROMPT_KAREEM_EXECUTION_MASTER_2027.md`](TASK_PROMPT_KAREEM_EXECUTION_MASTER_2027.md) for the verified Claude × Manus × OpenManus × GitHub Actions mission. It requires auditing existing work, testing one sample MP4 path, preserving secrets, and reporting evidence. The prompt being stored here does **not** mean Manus has been launched or the pipeline has passed tests.
