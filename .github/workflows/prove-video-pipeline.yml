@@ -6,11 +6,11 @@ on:
       title:
         description: Video title
         required: true
-        default: Limitless Mindset — Start Before You Feel Ready
+        default: Nobody Sees the Work
       script:
-        description: Script text for the proof video
+        description: Original script text for the proof video
         required: true
-        default: Stop waiting for perfect conditions. Start with what you have. Build one useful thing, publish it, and keep improving. Small consistent action compounds.
+        default: Keep doing the right work when nobody is watching. Make one useful thing with what you have. Stay patient, show gratitude, and take the next honest step. Consistency is built one day at a time.
   push:
     paths:
       - 'video-builder/**'
@@ -22,6 +22,7 @@ permissions:
 jobs:
   build-proof-video:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -38,10 +39,12 @@ jobs:
         env:
           PORT: '8001'
           OUTPUT_DIR: ${{ github.workspace }}/output
+          WORK_DIR: ${{ runner.temp }}/plg-video-work
+          TTS_ENGINE: espeak
         run: |
           nohup python3 app.py > /tmp/video-builder.log 2>&1 &
           echo $! > /tmp/video-builder.pid
-          for i in {1..20}; do
+          for i in {1..30}; do
             if curl -fsS http://127.0.0.1:8001/health; then exit 0; fi
             sleep 1
           done
@@ -50,8 +53,8 @@ jobs:
 
       - name: Build real MP4
         env:
-          TITLE: ${{ inputs.title || 'Limitless Mindset — Start Before You Feel Ready' }}
-          SCRIPT: ${{ inputs.script || 'Stop waiting for perfect conditions. Start with what you have. Build one useful thing, publish it, and keep improving. Small consistent action compounds.' }}
+          TITLE: ${{ inputs.title || 'Nobody Sees the Work' }}
+          SCRIPT: ${{ inputs.script || 'Keep doing the right work when nobody is watching. Make one useful thing with what you have. Stay patient, show gratitude, and take the next honest step. Consistency is built one day at a time.' }}
         run: |
           python3 - <<'PY'
           import json, os, urllib.request
@@ -65,30 +68,72 @@ jobs:
               headers={'Content-Type': 'application/json'},
               method='POST'
           )
-          with urllib.request.urlopen(req, timeout=180) as r:
-              result = json.load(r)
+          with urllib.request.urlopen(req, timeout=240) as response:
+              result = json.load(response)
           print(json.dumps(result, indent=2))
-          if result.get('status') != 'ok' or not result.get('size_bytes', 0) > 0:
-              raise SystemExit('Video build did not produce a valid MP4')
+          if result.get('status') != 'ok':
+              raise SystemExit('Video builder did not return status=ok')
+          if not result.get('size_bytes', 0) > 5000:
+              raise SystemExit('MP4 is missing or too small')
+          if not result.get('filename', '').endswith('.mp4'):
+              raise SystemExit('Builder did not return an MP4 filename')
           PY
 
-      - name: Validate MP4
+      - name: Validate MP4 streams, dimensions, duration, and size
         run: |
-          test -n "$(find output -type f -name '*.mp4' -print -quit)"
-          ffprobe -v error -show_entries format=duration,size -of json output/*.mp4
+          python3 - <<'PY'
+          import glob, json, os, subprocess, sys
+          files = glob.glob('output/*.mp4')
+          if len(files) != 1:
+              raise SystemExit(f'Expected exactly one MP4, found {len(files)}')
+          path = files[0]
+          size = os.path.getsize(path)
+          if size <= 5000:
+              raise SystemExit(f'MP4 too small: {size} bytes')
+          raw = subprocess.check_output([
+              'ffprobe', '-v', 'error', '-show_streams', '-show_format',
+              '-of', 'json', path
+          ], text=True)
+          probe = json.loads(raw)
+          streams = probe.get('streams', [])
+          video = [s for s in streams if s.get('codec_type') == 'video']
+          audio = [s for s in streams if s.get('codec_type') == 'audio']
+          if not video:
+              raise SystemExit('No video stream found')
+          if not audio:
+              raise SystemExit('No audio stream found')
+          width, height = video[0].get('width'), video[0].get('height')
+          if (width, height) != (1080, 1920):
+              raise SystemExit(f'Unexpected dimensions: {width}x{height}')
+          duration = float(probe.get('format', {}).get('duration', 0))
+          if duration < 3:
+              raise SystemExit(f'Video duration too short: {duration}s')
+          print(json.dumps({
+              'status': 'PASS',
+              'file': os.path.basename(path),
+              'size_bytes': size,
+              'duration_seconds': round(duration, 2),
+              'dimensions': f'{width}x{height}',
+              'video_codec': video[0].get('codec_name'),
+              'audio_codec': audio[0].get('codec_name'),
+              'video_stream': 'PASS',
+              'audio_stream': 'PASS'
+          }, indent=2))
+          PY
 
       - name: Upload proof video
         uses: actions/upload-artifact@v4
         with:
-          name: proof-video-${{ github.run_number }}
+          name: plg-proof-video-${{ github.run_number }}
           path: output/*.mp4
           if-no-files-found: error
           retention-days: 14
 
       - name: Publish proof summary
         run: |
-          echo "## Pipeline proof" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Real MP4 generated: YES" >> "$GITHUB_STEP_SUMMARY"
-          echo "- TTS: espeak-ng" >> "$GITHUB_STEP_SUMMARY"
+          echo "## Plan Life Grateful video pipeline proof" >> "$GITHUB_STEP_SUMMARY"
+          echo "- MP4 generated: YES (verified in prior step)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- TTS engine: espeak-ng (local, no API key)" >> "$GITHUB_STEP_SUMMARY"
           echo "- Rendering: Pillow + FFmpeg" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Artifact: proof-video-${{ github.run_number }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Checks: MP4 size, duration, 1080x1920 dimensions, video stream, audio stream" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Artifact: plg-proof-video-${{ github.run_number }}" >> "$GITHUB_STEP_SUMMARY"
