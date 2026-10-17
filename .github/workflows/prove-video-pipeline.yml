@@ -2,15 +2,6 @@ name: Prove Video Pipeline
 
 on:
   workflow_dispatch:
-    inputs:
-      title:
-        description: Video title
-        required: true
-        default: Nobody Sees the Work
-      script:
-        description: Original script text for the proof video
-        required: true
-        default: Keep doing the right work when nobody is watching. Make one useful thing with what you have. Stay patient, show gratitude, and take the next honest step. Consistency is built one day at a time.
   push:
     paths:
       - 'video-builder/**'
@@ -53,8 +44,8 @@ jobs:
 
       - name: Build real MP4
         env:
-          TITLE: ${{ inputs.title || 'Nobody Sees the Work' }}
-          SCRIPT: ${{ inputs.script || 'Keep doing the right work when nobody is watching. Make one useful thing with what you have. Stay patient, show gratitude, and take the next honest step. Consistency is built one day at a time.' }}
+          TITLE: Nobody Sees the Work
+          SCRIPT: Keep doing the right work when nobody is watching. Make one useful thing with what you have. Stay patient, show gratitude, and take the next honest step. Consistency is built one day at a time.
         run: |
           python3 - <<'PY'
           import json, os, urllib.request
@@ -82,7 +73,7 @@ jobs:
       - name: Validate MP4 streams, dimensions, duration, and size
         run: |
           python3 - <<'PY'
-          import glob, json, os, subprocess, sys
+          import glob, json, os, subprocess
           files = glob.glob('output/*.mp4')
           if len(files) != 1:
               raise SystemExit(f'Expected exactly one MP4, found {len(files)}')
