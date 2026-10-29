@@ -62,7 +62,7 @@ docker compose up --build -d
 curl http://127.0.0.1:8000/health
 ```
 
-The published ports bind to `127.0.0.1` by default, keeping the helper services local to the host. The Compose file pins n8n to the reviewed `2.45.4` release instead of mutable `:latest`.
+The published ports bind to `127.0.0.1` by default, keeping the helper services local to the host. The Compose file pins n8n to the reviewed `2.45.5` release instead of mutable `:latest`.
 
 n8n uses its built-in owner/user-management login. On first startup, open the local n8n page and create the owner account; the old `N8N_BASIC_AUTH_*` variables were removed in n8n v1. Keep the `n8n-data` volume because it stores instance state and credentials.
 
