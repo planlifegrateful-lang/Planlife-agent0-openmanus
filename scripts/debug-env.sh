@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Full environment dump for support / debugging
+# Redacted stack environment summary for support / debugging
 # Usage: ./scripts/debug-env.sh
 set -euo pipefail
 
@@ -49,8 +49,21 @@ else
 fi
 
 echo ""
-echo "[Env vars relevant to stack]"
-env | grep -E '^(CONTENT_URL|VIDEO_URL|BUILDER_URL|AI_UGC_DIR|VIDEO_BUILDER_PORT|WEBHOOK_LISTENER_PORT|OPENMANUS_PORT|N8N_)' || echo "  (none set)"
+echo "[Env vars relevant to stack (secret values redacted)]"
+found=false
+while IFS='=' read -r name value; do
+  case "$name" in
+    AI_UGC_DIR|VIDEO_BUILDER_PORT|WEBHOOK_LISTENER_PORT|OPENMANUS_PORT|N8N_HOST|N8N_PORT|N8N_PROTOCOL)
+      printf '  %s=%s\\n' "$name" "$value"
+      found=true
+      ;;
+    N8N_*|*_URL|*_KEY|*_TOKEN|*_SECRET|*_PASSWORD|*_CREDENTIAL*|*_AUTH*)
+      printf '  %s=[REDACTED]\\n' "$name"
+      found=true
+      ;;
+  esac
+done < <(env | sort)
+$found || echo "  (none set)"
 
 echo ""
 echo "[Repo files]"

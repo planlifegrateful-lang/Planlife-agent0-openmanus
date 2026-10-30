@@ -22,7 +22,7 @@ One entrypoint for everything:
 | `smoke` | Ultra-fast individual probes |
 | `e2e [topic] [platform]` | Full content → video end-to-end test |
 | `logs [service]` | Tail logs |
-| `debug` | Full environment dump for support |
+| `debug` | Redacted environment summary; secret values hidden |
 
 Examples:
 ```bash

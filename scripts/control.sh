@@ -37,7 +37,7 @@ Usage: ./scripts/control.sh <command> [args]
   smoke                Ultra-fast individual probes
   e2e [topic] [plat]   Full content → video end-to-end test
   logs [service]       Tail logs (all | video-builder | webhook-listener | ...)
-  debug                Full environment dump for support
+  debug                Redacted environment summary (secret values hidden) for support
   help                 Show this help
 
 Examples:
