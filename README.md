@@ -6,6 +6,38 @@ Pillow slides + espeak-ng voice + ffmpeg → real MP4.
 
 ---
 
+## Local Control Plane (NEW)
+
+One entrypoint for everything:
+
+```bash
+./scripts/control.sh help
+```
+
+| Command | What it does |
+|---------|--------------|
+| `start [--native]` | Start full stack (Docker or native) |
+| `stop` | Stop this project's Compose services without removing containers/volumes; send SIGTERM only to identified Planlife native processes; leave unknown listeners running |
+| `check` | Live ports + Docker + HTTP health matrix |
+| `smoke` | Ultra-fast individual probes |
+| `e2e [topic] [platform]` | Full content → video end-to-end test |
+| `logs [service]` | Tail logs |
+| `debug` | Redacted environment summary; secret values hidden |
+
+The `stop` command uses `docker compose stop`, not `down`. It preserves containers, networks, and volumes. Native processes are stopped only when their working directory or command path identifies them as belonging to this repository or the configured `AI_UGC_DIR`. Unrecognized listeners are left running; the script does not force-kill processes.
+
+Examples:
+```bash
+./scripts/control.sh start
+./scripts/control.sh check
+./scripts/control.sh e2e "morning gratitude" tiktok
+./scripts/control.sh logs webhook-listener
+```
+
+Make scripts executable once: `chmod +x scripts/*.sh`
+
+---
+
 ## Fastest path (Native – recommended)
 
 ```bash
