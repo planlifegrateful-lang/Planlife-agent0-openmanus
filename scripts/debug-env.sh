@@ -3,7 +3,7 @@
 # Usage: ./scripts/debug-env.sh
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="$(cd "$(dirname "\${BASH_SOURCE[0]}")/.." && pwd)"
 
 echo "══════════════════════════════════════"
 echo " Planlife Redacted Environment Summary"
@@ -54,11 +54,11 @@ found=false
 while IFS='=' read -r name value; do
   case "$name" in
     AI_UGC_DIR|VIDEO_BUILDER_PORT|WEBHOOK_LISTENER_PORT|OPENMANUS_PORT|N8N_HOST|N8N_PORT|N8N_PROTOCOL)
-      printf '  %s=%s\\n' "$name" "$value"
+      printf '  %s=%s\n' "$name" "$value"
       found=true
       ;;
     N8N_*|*_URL|*_KEY|*_TOKEN|*_SECRET|*_PASSWORD|*_CREDENTIAL*|*_AUTH*)
-      printf '  %s=[REDACTED]\\n' "$name"
+      printf '  %s=[REDACTED]\n' "$name"
       found=true
       ;;
   esac
@@ -79,4 +79,4 @@ done
 
 echo ""
 echo "══════════════════════════════════════"
-echo "End of dump. Share this output when asking for help."
+echo "End of redacted summary. Share this output when asking for help."
