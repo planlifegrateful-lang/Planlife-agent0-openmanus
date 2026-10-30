@@ -4,7 +4,7 @@
 #
 # Commands:
 #   start [--native]   Start full stack
-#   stop               Stop full stack
+#   stop               Stop only identified Planlife services; preserve Docker resources
 #   check              Live health matrix (ports + Docker + HTTP)
 #   smoke              Ultra-fast probes
 #   e2e [topic] [plat] Full content → video test
@@ -32,10 +32,10 @@ Planlife Local Control Plane
 Usage: ./scripts/control.sh <command> [args]
 
   start [--native]     Start full stack (Docker by default)
-  stop                 Stop everything cleanly
+  stop                 Stop only identified Planlife services; preserve containers/volumes and leave unknown listeners running
   check                Live ports + Docker + HTTP health matrix
   smoke                Ultra-fast individual probes
-  e2e [topic] [plat]   Full content → video end-to-end test
+  e2e [topic] [plat]   Full content → video test
   logs [service]       Tail logs (all | video-builder | webhook-listener | ...)
   debug                Redacted environment summary (secret values hidden) for support
   help                 Show this help
