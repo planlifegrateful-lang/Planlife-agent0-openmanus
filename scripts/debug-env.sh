@@ -3,7 +3,7 @@
 # Usage: ./scripts/debug-env.sh
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "\${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 echo "══════════════════════════════════════"
 echo " Planlife Redacted Environment Summary"
@@ -13,7 +13,7 @@ echo "════════════════════════�
 echo ""
 echo "[System]"
 uname -a 2>/dev/null || true
-echo "Shell: $SHELL"
+echo "Shell: ${SHELL:-unknown}"
 echo "PWD: $(pwd)"
 echo "ROOT: $ROOT"
 
@@ -21,7 +21,7 @@ echo ""
 echo "[Tools]"
 for cmd in docker docker-compose curl jq python3 ffmpeg espeak-ng ss lsof; do
   if command -v "$cmd" >/dev/null 2>&1; then
-    echo "  ✓ $cmd  → $(command -v $cmd)"
+    echo "  ✓ $cmd  → $(command -v "$cmd")"
   else
     echo "  ✗ $cmd  (missing)"
   fi
