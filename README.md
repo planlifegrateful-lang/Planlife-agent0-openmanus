@@ -17,12 +17,14 @@ One entrypoint for everything:
 | Command | What it does |
 |---------|--------------|
 | `start [--native]` | Start full stack (Docker or native) |
-| `stop` | Clean stop of everything |
+| `stop` | Stop this project's Compose services without removing containers/volumes; send SIGTERM only to identified Planlife native processes; leave unknown listeners running |
 | `check` | Live ports + Docker + HTTP health matrix |
 | `smoke` | Ultra-fast individual probes |
 | `e2e [topic] [platform]` | Full content → video end-to-end test |
 | `logs [service]` | Tail logs |
 | `debug` | Redacted environment summary; secret values hidden |
+
+The `stop` command uses `docker compose stop`, not `down`. It preserves containers, networks, and volumes. Native processes are stopped only when their working directory or command path identifies them as belonging to this repository or the configured `AI_UGC_DIR`. Unrecognized listeners are left running; the script does not force-kill processes.
 
 Examples:
 ```bash
