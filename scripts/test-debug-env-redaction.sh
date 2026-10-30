@@ -4,6 +4,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
+WORKDIR="$TMP/workdir"
+mkdir -p "$WORKDIR"
 
 cat > "$TMP/curl" <<'CURL'
 #!/usr/bin/env sh
@@ -12,10 +14,10 @@ CURL
 chmod +x "$TMP/curl"
 
 OUTPUT="$(
+  cd "$WORKDIR"
   env -i \
     PATH="$TMP:/usr/bin:/bin" \
     HOME="${HOME:-/tmp}" \
-    SHELL=/bin/bash \
     AI_UGC_DIR=/tmp/ai-ugc \
     N8N_HOST=localhost \
     N8N_PORT=5678 \
@@ -42,5 +44,7 @@ grep -q 'ANTHROPIC_API_KEY=\[REDACTED\]' <<<"$OUTPUT"
 grep -q 'GITHUB_TOKEN=\[REDACTED\]' <<<"$OUTPUT"
 grep -q 'WEBHOOK_URL=\[REDACTED\]' <<<"$OUTPUT"
 grep -q 'CONTENT_URL=\[REDACTED\]' <<<"$OUTPUT"
+grep -Fq "ROOT: $ROOT" <<<"$OUTPUT"
+grep -Fq "Shell: unknown" <<<"$OUTPUT"
 
-echo "PASS: debug environment output keeps safe settings and redacts secret-like values"
+echo "PASS: debug environment redacts secrets and resolves its own repo root from an unrelated working directory"
