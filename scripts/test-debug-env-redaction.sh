@@ -18,6 +18,7 @@ OUTPUT="$(
   env -i \
     PATH="$TMP:/usr/bin:/bin" \
     HOME="${HOME:-/tmp}" \
+    SHELL= \
     AI_UGC_DIR=/tmp/ai-ugc \
     N8N_HOST=localhost \
     N8N_PORT=5678 \
