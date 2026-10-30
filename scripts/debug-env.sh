@@ -6,7 +6,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 echo "══════════════════════════════════════"
-echo " Planlife Debug Environment Dump"
+echo " Planlife Redacted Environment Summary"
 echo " $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 echo "══════════════════════════════════════"
 

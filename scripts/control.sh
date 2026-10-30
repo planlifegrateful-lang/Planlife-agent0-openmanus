@@ -9,7 +9,7 @@
 #   smoke              Ultra-fast probes
 #   e2e [topic] [plat] Full content → video test
 #   logs [service]     Tail logs
-#   debug              Environment dump
+#   debug              Redacted environment summary (secrets hidden)
 #   help               This help
 set -euo pipefail
 
