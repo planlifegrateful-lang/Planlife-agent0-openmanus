@@ -57,11 +57,16 @@ One-click trigger of content → video pipeline.
 
 ```bash
 cp .env.example .env
+docker compose config --quiet
 docker compose up --build -d
-curl http://localhost:8000/health
+curl http://127.0.0.1:8000/health
 ```
 
----
+The published ports bind to `127.0.0.1` by default, keeping the helper services local to the host. The Compose file currently pins n8n to `2.45.7` instead of mutable `:latest`; this is a reviewed baseline, **not the latest stable release**. n8n `2.46.6` was released on November 4, 2026 and includes a fix for npm installation across platforms. The image is not being advanced until a Docker pull, Compose validation, startup, and health-check smoke test can be run. The newer `2.47.2` and `3.1.0` tags are pre-releases.
+
+n8n uses its built-in owner/user-management login. On first startup, open the local n8n page and create the owner account; the old `N8N_BASIC_AUTH_*` variables were removed in n8n v1. Keep the `n8n-data` volume because it stores instance state and credentials.
+
+**Remote access warning:** do not change all services to `0.0.0.0`. If you need to open the n8n editor from a phone on your trusted LAN, set only `N8N_BIND_ADDRESS` to the laptop's LAN IP and update `N8N_HOST` and `WEBHOOK_URL` to match. Keep helper-service bindings on loopback unless you have separately added authentication and firewall restrictions. Do not expose plain HTTP directly to the public internet; use a properly configured HTTPS reverse proxy.
 
 ## Ports
 | Service            | Port |
@@ -85,7 +90,6 @@ curl http://localhost:8000/health
 ## n8n Cloud
 See [N8N_CLOUD_SETUP.md](N8N_CLOUD_SETUP.md)  
 Import [n8n/full-pipeline-cloud.json](n8n/full-pipeline-cloud.json)
-
 
 ---
 
